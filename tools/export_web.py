@@ -62,7 +62,7 @@ def main():
     if any(web_dir.iterdir()):
         raise SystemExit('build/web must be empty to avoid packaging stale files; archive or move the previous build first.')
     godot_run(executable, '--editor', '--import')
-    godot_run(executable, '--script', 'res://tests/smoke.gd', testing=True)
+    godot_run(executable, '--verbose', '--script', 'res://tests/smoke.gd', testing=True)
     godot_run(executable, '--export-release', 'Web', str(web_dir / 'index.html'))
     for name in ['bridge.js', 'boot.js']:
         shutil.copy2(ROOT / 'web' / name, web_dir / name)

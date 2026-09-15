@@ -80,5 +80,10 @@ func _run() -> void:
 	main.queue_free()
 	container.queue_free()
 	await process_frame
+	await process_frame
+	# Release this coroutine's locals before shutting down the SceneTree.
+	call_deferred("_exit_test")
+
+func _exit_test() -> void:
 	print("GODOT SMOKE: " + ("FAILED" if failed else "PASSED"))
 	quit(1 if failed else 0)
