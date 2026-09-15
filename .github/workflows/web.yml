@@ -1,0 +1,62 @@
+name: Godot Web · Пепельные нити
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**/*.md'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: web-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      GODOT_VERSION: 4.4.1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test JavaScript platform bridge
+        run: node --test tests/bridge.test.cjs
+      - name: Check source structure and generated assets
+        run: python tools/validate_source.py
+      - name: Install matching official Godot editor and export templates
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .tools
+          cd .tools
+          RELEASE="https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-stable"
+          EDITOR="Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          TEMPLATES="Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+          curl --fail --location --retry 3 --output "$EDITOR" "$RELEASE/$EDITOR"
+          curl --fail --location --retry 3 --output "$TEMPLATES" "$RELEASE/$TEMPLATES"
+          curl --fail --location --retry 3 --output SHA512-SUMS.txt "$RELEASE/SHA512-SUMS.txt"
+          python ../tools/check_downloads.py "$EDITOR" "$TEMPLATES"
+          unzip -q "$EDITOR"
+          unzip -q "$TEMPLATES"
+          GODOT_TEMPLATES_DIR="$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
+          mkdir -p "$GODOT_TEMPLATES_DIR"
+          cp templates/web_* "$GODOT_TEMPLATES_DIR/"
+          chmod +x "Godot_v${GODOT_VERSION}-stable_linux.x86_64"
+      - name: Import, run engine smoke tests, and export Web
+        run: python tools/export_web.py --godot "$GITHUB_WORKSPACE/.tools/Godot_v${GODOT_VERSION}-stable_linux.x86_64"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pepelnye-niti-yandex
+          path: dist/pepelnye-niti-yandex.zip
+          if-no-files-found: error
+          retention-days: 14
