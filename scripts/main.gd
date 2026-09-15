@@ -4,12 +4,14 @@ extends Node3D
 const MISSION_SECONDS := 140.0
 const MAX_DEBRIS := 48
 const CORE_COUNT := 3
+const THREAD_NODE_COUNT := 3
 
 var level: AshWorkshop
 var player: AshPlayer
 var running := false
 var sandbox := false
 var collected: Array[int] = []
+var used_threads: Array[int] = []
 var health := 100.0
 var seconds := MISSION_SECONDS
 var alarm := false
@@ -91,6 +93,11 @@ func _start_run(relaxed: bool = false, resume: bool = false, start_paused: bool 
 		var index := int(value)
 		if index >= 0 and index < CORE_COUNT and index not in collected:
 			collected.append(index)
+	used_threads.clear()
+	for value in session.get("used_threads", []):
+		var index := int(value)
+		if index >= 0 and index < THREAD_NODE_COUNT and index not in used_threads:
+			used_threads.append(index)
 	health = clampf(float(session.get("health", 100.0)), 1.0, 100.0)
 	seconds = clampf(float(session.get("seconds", MISSION_SECONDS)), 0.1, MISSION_SECONDS)
 	charges = clampi(int(session.get("charges", 5)), 0, 5)
@@ -109,6 +116,8 @@ func _start_run(relaxed: bool = false, resume: bool = false, start_paused: bool 
 	player.set_tool(0)
 	for index in collected:
 		level.hide_core(index)
+	for index in used_threads:
+		level.hide_thread_node(index)
 	level.sentinel.visible = alarm
 	_menu.visible = false
 	if start_paused:
@@ -139,6 +148,11 @@ func _process(delta: float) -> void:
 			var core := level.cores[i]
 			core.rotation.y += delta * 0.7
 			core.position.y = float(core.get_meta("base_y")) + sin(_age * 2.0 + float(i)) * 0.09
+	for i in range(level.thread_nodes.size()):
+		if i not in used_threads:
+			var thread_node := level.thread_nodes[i]
+			thread_node.rotation.y += delta * 0.35
+			thread_node.position.y = float(thread_node.get_meta("base_y")) + sin(_age * 2.4 + float(i)) * 0.04
 	for i in range(_debris.size() - 1, -1, -1):
 		_debris[i]["life"] = float(_debris[i]["life"]) - delta
 		var body: RigidBody3D = _debris[i]["node"]
@@ -255,7 +269,23 @@ func _interact() -> void:
 		elif collected.size() == CORE_COUNT:
 			_toast("Весь свет у тебя. Выход там, где ты начал!", 6.0)
 		_save_now()
-	elif player.global_position.distance_to(level.exit_at) < 2.4:
+		return
+	var thread_index := _near_thread_node()
+	if thread_index >= 0:
+		if charges >= 5 and health >= 100.0:
+			_toast("Нить цела. Узел пригодится во время тревоги.")
+			return
+		used_threads.append(thread_index)
+		level.hide_thread_node(thread_index)
+		charges = mini(5, charges + 2)
+		health = minf(100.0, health + 25.0)
+		_pickup_audio.play()
+		_pulse_flash(level.thread_nodes[thread_index].global_position)
+		_toast("Узел вплетён: здоровье восстановлено, катушка получила 2 импульса.", 5.0)
+		_save_now()
+		_update_hud()
+		return
+	if player.global_position.distance_to(level.exit_at) < 2.4:
 		if collected.size() == CORE_COUNT:
 			_finish(true)
 		else:
@@ -269,6 +299,20 @@ func _near_core() -> int:
 		var target := level.cores[i].global_position
 		var offset := target - origin
 		if offset.length() > 2.6 or offset.normalized().dot(-player.camera.global_basis.z) < 0.6:
+			continue
+		var query := PhysicsRayQueryParameters3D.create(origin, target, 1)
+		if get_world_3d().direct_space_state.intersect_ray(query).is_empty():
+			return i
+	return -1
+
+func _near_thread_node() -> int:
+	var origin := player.camera.global_position
+	for i in range(level.thread_nodes.size()):
+		if i in used_threads:
+			continue
+		var target := level.thread_nodes[i].global_position
+		var offset := target - origin
+		if offset.length() > 2.6 or offset.normalized().dot(-player.camera.global_basis.z) < 0.55:
 			continue
 		var query := PhysicsRayQueryParameters3D.create(origin, target, 1)
 		if get_world_3d().direct_space_state.intersect_ray(query).is_empty():
@@ -348,7 +392,8 @@ func _save_now() -> void:
 	if _has_session:
 		session = {
 			"sandbox": sandbox, "collected": collected.duplicate(), "health": health,
-			"seconds": seconds, "charges": charges, "destroyed": level.snapshot(),
+			"seconds": seconds, "charges": charges, "used_threads": used_threads.duplicate(),
+			"destroyed": level.snapshot(),
 			"position": [player.position.x, player.position.y, player.position.z],
 			"yaw": player.rotation.y, "pitch": player.camera.rotation.x
 		}
@@ -589,6 +634,8 @@ func _update_hud() -> void:
 	_hint.text = ""
 	if _near_core() >= 0:
 		_hint.text = "F / ПКМ · ЗАБРАТЬ СВЕТ"
+	elif _near_thread_node() >= 0:
+		_hint.text = "F / ПКМ · ВПЛЕСТИ УЗЕЛ НИТИ"
 	elif player.position.distance_to(level.exit_at) < 2.4:
 		_hint.text = "F / ПКМ · В УБЕЖИЩЕ" if collected.size() == CORE_COUNT else "ВЕРНИСЬ С ТРЕМЯ ЯДРАМИ"
 	else:

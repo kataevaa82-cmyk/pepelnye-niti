@@ -18,6 +18,7 @@ func _run() -> void:
 	await process_frame
 	check(main.level.structures.size() == 10, "ten stable destructible groups")
 	check(main.level.cores.size() == 3, "three cores")
+	check(main.level.thread_nodes.size() == 3, "three restorative thread nodes")
 	check(not main.running, "title screen is paused")
 	main._start_run(false)
 	await physics_frame
@@ -59,12 +60,22 @@ func _run() -> void:
 		main._interact()
 		check(main.collected.has(i), "core %d is collectible inside its room" % i)
 	check(main.alarm, "first stolen core starts the alarm")
+	main.charges = 1
+	main.health = 50.0
+	main.player.position = main.level.thread_nodes[0].global_position + Vector3(0, -0.5, 1.1)
+	main.player.restore_view(0, 0)
+	await physics_frame
+	main._interact()
+	check(main.used_threads.has(0), "thread node can be woven")
+	check(main.charges == 3 and main.health == 75.0, "thread node restores resources")
 	main._save_now()
 	check(main._saved["session"]["collected"].size() == 3, "save has all collected cores")
+	check(main._saved["session"]["used_threads"].size() == 1, "save has woven thread nodes")
 	main._pause()
 	check(not main.running and paused, "pause stops the scene tree")
 	main._start_run(false, true)
 	check(main.collected.size() == 3 and main.alarm, "resume restores cores and alarm")
+	check(main.used_threads.size() == 1 and not main.level.thread_nodes[0].visible, "resume restores woven thread nodes")
 	main.player.position = main.level.exit_at + Vector3(0, 0.2, 0)
 	main._interact()
 	check(main._menu_mode == "win", "all three cores at exit wins")

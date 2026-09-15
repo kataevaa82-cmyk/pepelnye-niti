@@ -6,6 +6,7 @@ signal altered
 
 var structures: Array[VoxelStructure] = []
 var cores: Array[Node3D] = []
+var thread_nodes: Array[Node3D] = []
 var sentinel: Node3D
 var sentinel_eye: MeshInstance3D
 var exit_at := Vector3(0, 0, 11.6)
@@ -35,6 +36,9 @@ func build(destroyed: Dictionary = {}) -> void:
 	_core(Vector3(-8, 1.2, -3.9), "I · ПАМЯТЬ")
 	_core(Vector3(8, 1.2, -3.9), "II · ДЫХАНИЕ")
 	_core(Vector3(0, 1.2, -11.5), "III · СЕРДЦЕ")
+	_thread_node(Vector3(-11.4, 0.72, 7.4), "УЗЕЛ I")
+	_thread_node(Vector3(11.2, 0.72, 1.8), "УЗЕЛ II")
+	_thread_node(Vector3(0, 0.72, -6.7), "УЗЕЛ III")
 	_build_exit()
 	_build_sentinel()
 
@@ -164,6 +168,27 @@ func _core(at: Vector3, title: String) -> void:
 func hide_core(index: int) -> void:
 	cores[index].visible = false
 	var label: Label3D = cores[index].get_meta("label_node")
+	label.visible = false
+
+func _thread_node(at: Vector3, title: String) -> void:
+	var root := Node3D.new()
+	add_child(root)
+	root.position = at
+	root.set_meta("base_y", at.y)
+	AshGeometry.cylinder(root, Vector3(0, -0.34, 0), 0.20, 0.68, _wood)
+	for offset in [-0.35, 0.35]:
+		AshGeometry.cylinder(root, Vector3(0, offset - 0.34, 0), 0.30, 0.08, _iron)
+	for i in range(5):
+		var ring := AshGeometry.cylinder(root, Vector3(0, -0.55 + float(i) * 0.11, 0), 0.225, 0.025, _glow)
+		ring.rotation.x = PI / 2.0
+	AshGeometry.sphere(root, Vector3(0, 0.08, 0), 0.11, _glow)
+	var label := AshGeometry.label(self, at + Vector3(0, 0.72, 0), title, Color("a7f0c9"), 24)
+	root.set_meta("label_node", label)
+	thread_nodes.append(root)
+
+func hide_thread_node(index: int) -> void:
+	thread_nodes[index].visible = false
+	var label: Label3D = thread_nodes[index].get_meta("label_node")
 	label.visible = false
 
 func _build_exit() -> void:
