@@ -77,6 +77,9 @@ func _run() -> void:
 	main._process(0.1)
 	check(main._menu_mode == "lose", "countdown expiration loses")
 	paused = false
+	main._stop_audio()
+	# Let the audio mixer release stopped WAV playbacks before destroying nodes.
+	await create_timer(0.2).timeout
 	main.queue_free()
 	container.queue_free()
 	await process_frame

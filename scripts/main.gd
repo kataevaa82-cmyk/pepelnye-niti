@@ -184,7 +184,19 @@ func _set_running(active: bool) -> void:
 		if not _ambient.playing:
 			_ambient.play()
 	else:
+		_stop_audio()
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
+func _stop_audio() -> void:
+	for audio in [_ambient, _hit_audio, _pulse_audio, _pickup_audio]:
+		if is_instance_valid(audio):
+			audio.stop()
+
+func _exit_tree() -> void:
+	_stop_audio()
+	for audio in [_ambient, _hit_audio, _pulse_audio, _pickup_audio]:
+		if is_instance_valid(audio):
+			audio.stream = null
 
 func _pause() -> void:
 	if running:
