@@ -14,8 +14,9 @@ var cells: Dictionary = {}
 var removed: Dictionary = {}
 var health: Dictionary = {}
 var durability := 1
-var _palette: Array[StandardMaterial3D] = []
-var _mesh: BoxMesh
+var _palette: Array[Material] = []
+var _tints: Array[Color] = []
+var _mesh: ArrayMesh
 var _shape: BoxShape3D
 var _fragment_budget := 0
 
@@ -26,12 +27,13 @@ func build(id: String, dimensions: Vector3i, tint: Color, hardness: int, erased:
 	for value in erased:
 		if value is String:
 			removed[value] = true
-	_mesh = BoxMesh.new()
-	_mesh.size = Vector3.ONE * (CELL - 0.018)
+	_mesh = AshGeometry.bevel_mesh(Vector3.ONE * (CELL - 0.018), 0.022)
 	_shape = BoxShape3D.new()
 	_shape.size = Vector3.ONE * CELL
 	for i in range(5):
-		_palette.append(AshGeometry.material(tint.darkened(float(i) * 0.055)))
+		var shade := tint.darkened(float(i) * 0.055)
+		_tints.append(shade)
+		_palette.append(AshSurfaces.material(1 if hardness > 1 else 2, shade))
 	for x in range(dimensions.x):
 		for y in range(dimensions.y):
 			for z in range(dimensions.z):
@@ -95,7 +97,7 @@ func _collapse_unsupported(impact: Vector3) -> void:
 func _remove(key: Vector3i, impact: Vector3) -> void:
 	var body: StaticBody3D = cells[key]
 	var at := body.global_position
-	var tint := _palette[posmod(key.x * 13 + key.y * 7 + key.z * 3, 5)].albedo_color
+	var tint := _tints[posmod(key.x * 13 + key.y * 7 + key.z * 3, 5)]
 	if _fragment_budget > 0:
 		_fragment_budget -= 1
 		fragment.emit(at, tint, (at - impact).normalized() * 3.2 + Vector3.UP * 2.1)

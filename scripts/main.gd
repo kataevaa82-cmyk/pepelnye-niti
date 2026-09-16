@@ -18,6 +18,8 @@ var alarm := false
 var charges := 5
 var _has_session := false
 var _muted := false
+var _high_quality := true
+var _help_return := "title"
 var _save_problem := false
 var _saved: Dictionary = {}
 var _best := 0
@@ -34,6 +36,7 @@ var _touch_index := -1
 
 var _hud: Control
 var _menu: PanelContainer
+var _menu_backdrop: AshMenuBackdrop
 var _menu_content: VBoxContainer
 var _objective: Label
 var _status: Label
@@ -53,6 +56,8 @@ func _ready() -> void:
 	_saved = Platform.load_data()
 	_best = int(_saved.get("best", 0))
 	_muted = bool(_saved.get("muted", false))
+	_high_quality = bool(_saved.get("high_quality", not DisplayServer.is_touchscreen_available()))
+	get_viewport().msaa_3d = Viewport.MSAA_4X if _high_quality else Viewport.MSAA_DISABLED
 	Platform.pause_requested.connect(_pause)
 	Platform.ad_closed.connect(_after_ad)
 	Platform.save_failed.connect(_save_failed)
@@ -80,6 +85,7 @@ func _build_level(destroyed: Dictionary) -> void:
 	level = AshWorkshop.new()
 	add_child(level)
 	level.build(destroyed)
+	level.set_quality(_high_quality)
 	level.fragments.connect(_spawn_fragment)
 	level.altered.connect(_save_now)
 
@@ -131,6 +137,7 @@ func _process(delta: float) -> void:
 	if not running:
 		return
 	_age += delta
+	level.animate(_age, delta)
 	_save_clock += delta
 	_hud_clock += delta
 	_cooldown = maxf(0.0, _cooldown - delta)
@@ -190,6 +197,7 @@ func _set_running(active: bool) -> void:
 	player.touch_sprint = false
 	_touch_index = -1
 	_hud.visible = active
+	_menu_backdrop.visible = not active
 	AudioServer.set_bus_mute(0, _muted or not active)
 	Platform.gameplay(active)
 	if active:
@@ -204,6 +212,7 @@ func _set_running(active: bool) -> void:
 func _stop_audio() -> void:
 	for audio in [_ambient, _hit_audio, _pulse_audio, _pickup_audio]:
 		if is_instance_valid(audio):
+			audio.stream_paused = false
 			audio.stop()
 
 func _exit_tree() -> void:
@@ -373,9 +382,8 @@ func _retry_with_ad() -> void:
 	if _waiting_ad:
 		return
 	_waiting_ad = true
-	for node in _menu_content.get_children():
-		if node is Button:
-			node.disabled = true
+	for node in _menu_content.find_children("*", "Button", true, false):
+		node.disabled = true
 	Platform.show_interstitial()
 
 func _after_ad() -> void:
@@ -397,7 +405,7 @@ func _save_now() -> void:
 			"position": [player.position.x, player.position.y, player.position.z],
 			"yaw": player.rotation.y, "pitch": player.camera.rotation.x
 		}
-	_saved = {"version": 1, "best": _best, "muted": _muted, "session": session}
+	_saved = {"version": 1, "best": _best, "muted": _muted, "high_quality": _high_quality, "session": session}
 	Platform.save_data(_saved)
 
 func _save_failed() -> void:
@@ -419,6 +427,14 @@ func _audio_setup() -> void:
 	_hit_audio = _audio("res://assets/audio/hit.wav", -14.0)
 	_pulse_audio = _audio("res://assets/audio/pulse.wav", -16.0)
 	_pickup_audio = _audio("res://assets/audio/core.wav", -14.0)
+
+func _toggle_quality() -> void:
+	_high_quality = not _high_quality
+	get_viewport().msaa_3d = Viewport.MSAA_4X if _high_quality else Viewport.MSAA_DISABLED
+	level.set_quality(_high_quality)
+	_saved["high_quality"] = _high_quality
+	Platform.save_data(_saved)
+	_show_menu(_menu_mode)
 
 func _audio(path: String, volume: float) -> AudioStreamPlayer:
 	var audio := AudioStreamPlayer.new()
@@ -444,6 +460,13 @@ func _build_ui() -> void:
 	_hud.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_hud.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(_hud)
+	var vignette := ColorRect.new()
+	vignette.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	vignette.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var vignette_mat := ShaderMaterial.new()
+	vignette_mat.shader = preload("res://assets/shaders/vignette.gdshader")
+	vignette.material = vignette_mat
+	_hud.add_child(vignette)
 	_objective = _label(_hud, "", 27, Color("e6d6b7"))
 	_objective.position = Vector2(28, 24)
 	_objective.size = Vector2(620, 80)
@@ -488,30 +511,31 @@ func _build_ui() -> void:
 	pause_button.pressed.connect(_pause)
 	_hud.add_child(pause_button)
 	_touch_ui()
+	_menu_backdrop = AshMenuBackdrop.new()
+	_menu_backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	root.add_child(_menu_backdrop)
 	_menu = PanelContainer.new()
-	_menu.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
-	_menu.offset_left = -290
-	_menu.offset_right = 290
-	_menu.offset_top = -316
-	_menu.offset_bottom = 316
+	_menu.set_anchors_and_offsets_preset(Control.PRESET_LEFT_WIDE)
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.055, 0.083, 0.09, 0.96)
-	style.border_color = Color("687664")
-	style.set_border_width_all(1)
-	style.set_corner_radius_all(8)
-	style.content_margin_left = 30
+	style.bg_color = Color(0.02, 0.035, 0.039, 0.12)
+	style.content_margin_left = 58
 	style.content_margin_right = 30
-	style.content_margin_top = 24
-	style.content_margin_bottom = 24
+	style.content_margin_top = 40
+	style.content_margin_bottom = 28
 	_menu.add_theme_stylebox_override("panel", style)
 	root.add_child(_menu)
+	_layout_menu()
+	get_viewport().size_changed.connect(_layout_menu)
 	var scroll := ScrollContainer.new()
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	_menu.add_child(scroll)
 	_menu_content = VBoxContainer.new()
 	_menu_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_menu_content.add_theme_constant_override("separation", 12)
+	_menu_content.add_theme_constant_override("separation", 14)
 	scroll.add_child(_menu_content)
+
+func _layout_menu() -> void:
+	_menu.offset_right = minf(610.0, get_viewport().get_visible_rect().size.x)
 
 func _label(parent: Node, value: String, font_size: int, tint: Color) -> Label:
 	var label := Label.new()
@@ -532,50 +556,95 @@ func _show_menu(mode: String) -> void:
 		_menu_content.remove_child(node)
 		node.queue_free()
 	_menu.visible = true
-	_menu_text("ПЕПЕЛЬНЫЕ НИТИ", 36, Color("c5e3c9"))
-	_menu_text("ЦЕХ, КОТОРЫЙ НЕ УСНУЛ", 17, Color("aa9c80"))
+	_menu_text("Г Л А В А  I   /   Ц Е Х  П А М Я Т И", 13, Color("a3c9b9"))
+	var title := _menu_text("Пепельные\nнити", 58, Color("ebe4cd"))
+	title.add_theme_font_override("font", preload("res://assets/fonts/DejaVuSerif.ttf"))
+	title.add_theme_constant_override("line_spacing", -8)
+	_menu_text("Свет помнит дорогу домой.", 19, Color("b5b9a8"))
+	var separator := HSeparator.new()
+	separator.modulate = Color(0.61, 0.78, 0.68, 0.35)
+	_menu_content.add_child(separator)
 	if mode == "title":
-		_menu_text("Ты — Стежок, маленький хранитель света. В заброшенной мастерской остались три ядра. Разбери преграды, подготовь короткий путь и вынеси свет, пока Сборщик не забрал его.", 21)
+		_menu_text("Мир замолчал. Но в старой мастерской\nещё теплится жизнь. Стань Стежком —\nи собери её по ниточке.", 20)
 		var session = _saved.get("session", {})
 		if session is Dictionary and not session.is_empty():
-			_menu_button("ПРОДОЛЖИТЬ СОХРАНЁННУЮ ПОПЫТКУ", func(): _start_run(false, true))
-		_menu_button("НАЧАТЬ НОВУЮ ПОПЫТКУ", func(): _start_run(false))
-		_menu_button("СВОБОДНОЕ РАЗРУШЕНИЕ · БЕЗ ТАЙМЕРА", func(): _start_run(true))
+			_menu_button("01    ПРОДОЛЖИТЬ ПУТЬ", func(): _start_run(false, true))
+			_menu_button("02    НАЧАТЬ ЗАНОВО", func(): _start_run(false))
+		else:
+			_menu_button("01    ВОЙТИ В МАСТЕРСКУЮ", func(): _start_run(false))
+		_menu_button("02    СВОБОДНОЕ РАЗРУШЕНИЕ", func(): _start_run(true))
 	elif mode == "pause":
-		_menu_text("Твоя нить не оборвалась. Игра на паузе.", 22)
-		_menu_button("ПРОДОЛЖИТЬ", _resume)
-		_menu_button("СОХРАНИТЬ И ВЕРНУТЬСЯ В МЕНЮ", _save_and_title)
+		_menu_text("Нить натянута. Время остановилось.", 21)
+		_menu_button("01    ПРОДОЛЖИТЬ", _resume)
+		_menu_button("02    СОХРАНИТЬ И В МЕНЮ", _save_and_title)
 	elif mode == "win":
-		_menu_text("СВЕТ ВЕРНУЛСЯ ДОМОЙ", 29, Color("a9efbf"))
-		_menu_text("Все три ядра спасены. За стенами убежища вновь слышно тихое дыхание.", 22)
-		_menu_text("Разобрано блоков: %d\nЛучший результат: %d" % [level.total_blocks - level.remaining_blocks(), _best], 20)
+		_menu_text("СВЕТ ВЕРНУЛСЯ ДОМОЙ", 25, Color("b3efd0"))
+		_menu_text("Три ядра спасены. В убежище снова\nслышно тихое дыхание.", 20)
+		_menu_text("Разобрано блоков: %d  ·  Рекорд: %d" % [level.total_blocks - level.remaining_blocks(), _best], 17)
 		_menu_button("ЕЩЁ ОДНА ПОПЫТКА · ВОЗМОЖНА РЕКЛАМА", _retry_with_ad)
 		_menu_button("В МЕНЮ", func(): _show_menu("title"))
 	elif mode == "lose":
-		_menu_text("НИТЬ ОБОРВАЛАСЬ", 29, Color("e7b798"))
-		_menu_text("Мастерская погасла. В следующий раз сначала пробей проходы ко всем ядрам — и только потом поднимай первое.", 22)
+		_menu_text("НИТЬ ОБОРВАЛАСЬ", 25, Color("e7b798"))
+		_menu_text("Сначала пробей проходы ко всем ядрам.\nИ только потом поднимай первое.", 20)
 		_menu_button("ПОПРОБОВАТЬ СНОВА · ВОЗМОЖНА РЕКЛАМА", _retry_with_ad)
 		_menu_button("В МЕНЮ", func(): _show_menu("title"))
-	_menu_button("ЗВУК: " + ("ВЫКЛЮЧЕН" if _muted else "ВКЛЮЧЁН"), _toggle_sound)
-	_menu_text("WASD — движение · мышь — обзор\nЛКМ / R — удар · ПКМ / F — взять / выйти\n1 / 2 — киянка / импульс · Shift — бег\nПробел — прыжок · Esc / P — пауза\nБез мыши: Q / E — поворот, T / G — вверх / вниз.", 16, Color("b0b8a7"))
-	_menu_text("Прототип 0.1 · Godot · Сохранение на этом устройстве" + ("\nСохранение недоступно в этом браузере." if _save_problem else ""), 14, Color("939c8d"))
+	elif mode == "help":
+		_menu_text("ПОДГОТОВЬ ПУТЬ. СОБЕРИ СВЕТ. ВЕРНИСЬ.", 18, Color("b3efd0"))
+		_menu_text("До первого ядра время не идёт. Разбей преграды, запомни дорогу. Затем собери три ядра за 140 секунд и вернись к зелёному выходу. Узлы нити лечат и заряжают катушку.", 18)
+		_menu_text("WASD — движение  ·  мышь — обзор\nЛКМ / R — удар  ·  ПКМ / F — взять\n1 / 2 — инструменты  ·  Shift — бег\nПробел — прыжок  ·  Esc / P — пауза\nБез мыши: Q/E — поворот, T/G — обзор.", 17)
+		_menu_button("НАЗАД К СВОЕЙ НИТИ", func(): _show_menu(_help_return))
+	if mode != "help":
+		_menu_button("03    КАК ИГРАТЬ", _open_help, true)
+		var settings := HBoxContainer.new()
+		settings.add_theme_constant_override("separation", 8)
+		_menu_content.add_child(settings)
+		_menu_button("ЗВУК  " + ("ВЫКЛ" if _muted else "ВКЛ"), _toggle_sound, true, settings)
+		_menu_button("ГРАФИКА  " + ("ВЫСОКАЯ" if _high_quality else "ЭКОНОМНАЯ"), _toggle_quality, true, settings)
+	_menu_text("v0.3  /  Прогресс сохраняется на этом устройстве" + ("\nСохранение недоступно." if _save_problem else ""), 13, Color("84998e"))
+	var menu_scroll := _menu_content.get_parent() as ScrollContainer
+	menu_scroll.scroll_vertical = 0
+	if mode != "help":
+		for child in _menu_content.get_children():
+			if child is Button:
+				child.grab_focus()
+				break
 
-func _menu_text(value: String, font_size: int, tint: Color = Color("ded6c1")) -> void:
+func _menu_text(value: String, font_size: int, tint: Color = Color("cccabc")) -> Label:
 	var label := _label(_menu_content, value, font_size, tint)
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	return label
 
 func _save_and_title() -> void:
 	_save_now()
 	_show_menu("title")
 
-func _menu_button(value: String, callback: Callable) -> void:
+func _open_help() -> void:
+	_help_return = _menu_mode
+	_show_menu("help")
+
+func _menu_button(value: String, callback: Callable, quiet: bool = false, parent: Node = null) -> void:
 	var button := Button.new()
 	button.text = value
-	button.custom_minimum_size.y = 47
-	button.add_theme_font_size_override("font_size", 17)
+	button.custom_minimum_size.y = 38 if quiet else 54
+	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	button.add_theme_font_size_override("font_size", 14 if quiet else 17)
+	button.add_theme_color_override("font_color", Color("dadccc"))
+	button.add_theme_color_override("font_hover_color", Color("efffe4"))
+	button.add_theme_color_override("font_focus_color", Color("efffe4"))
+	for state in ["normal", "hover", "pressed", "focus", "disabled"]:
+		var style := StyleBoxFlat.new()
+		var lit: bool = state == "hover" or state == "pressed"
+		style.bg_color = Color(0.26, 0.42, 0.36, 0.55) if lit else Color(0.09, 0.16, 0.15, 0.45 if not quiet else 0.12)
+		style.border_color = Color("b7e3c9") if lit or state == "focus" else Color("425a50")
+		style.border_width_left = 3 if not quiet else 1
+		style.border_width_bottom = 1
+		style.content_margin_left = 17
+		style.content_margin_right = 12
+		button.add_theme_stylebox_override(state, style)
 	button.pressed.connect(callback)
-	_menu_content.add_child(button)
+	(parent if parent != null else _menu_content).add_child(button)
 
 func _touch_ui() -> void:
 	var touch := DisplayServer.is_touchscreen_available()

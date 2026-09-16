@@ -11,17 +11,23 @@ var sentinel: Node3D
 var sentinel_eye: MeshInstance3D
 var exit_at := Vector3(0, 0, 11.6)
 var total_blocks := 0
-var _wood: StandardMaterial3D
-var _iron: StandardMaterial3D
-var _stone: StandardMaterial3D
+var _wood: Material
+var _iron: Material
+var _stone: Material
 var _glow: StandardMaterial3D
+var _detail: Node3D
+var _sun: DirectionalLight3D
+var _ash: CPUParticles3D
+var _rotor: Node3D
 
 func build(destroyed: Dictionary = {}) -> void:
 	process_mode = Node.PROCESS_MODE_PAUSABLE
-	_wood = AshGeometry.material(Color("655442"))
-	_iron = AshGeometry.material(Color("303b3c"), 0.0, 0.5)
-	_stone = AshGeometry.material(Color("6f7167"))
+	_wood = AshSurfaces.material(2, Color("634f3a"))
+	_iron = AshSurfaces.material(1, Color("394541"))
+	_stone = AshSurfaces.material(0, Color("5b5d54"))
 	_glow = AshGeometry.material(Color("87d8b6"), 1.3)
+	_detail = Node3D.new()
+	add_child(_detail)
 	_environment()
 	_architecture()
 	_build_rooms()
@@ -41,6 +47,8 @@ func build(destroyed: Dictionary = {}) -> void:
 	_thread_node(Vector3(0, 0.72, -6.7), "УЗЕЛ III")
 	_build_exit()
 	_build_sentinel()
+	_decorate()
+	AshGeometry.batch(_detail)
 
 func _environment() -> void:
 	var sky := ProceduralSkyMaterial.new()
@@ -54,22 +62,34 @@ func _environment() -> void:
 	environment.sky.sky_material = sky
 	environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	environment.ambient_light_color = Color("b2bbad")
-	environment.ambient_light_energy = 0.7
+	environment.ambient_light_energy = 0.48
+	environment.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
+	environment.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	environment.tonemap_exposure = 0.82
 	environment.fog_enabled = true
 	environment.fog_light_color = Color("766b59")
-	environment.fog_density = 0.015
+	environment.fog_density = 0.013
 	var world := WorldEnvironment.new()
 	world.environment = environment
 	add_child(world)
 	var sun := DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-53, -30, 0)
 	sun.light_color = Color("ffe1af")
-	sun.light_energy = 1.1
+	sun.light_energy = 0.72
 	sun.shadow_enabled = true
+	sun.directional_shadow_max_distance = 55.0
+	sun.shadow_bias = 0.03
+	sun.shadow_normal_bias = 1.2
 	add_child(sun)
+	_sun = sun
+	var bounce := DirectionalLight3D.new()
+	bounce.rotation_degrees = Vector3(-25, 145, 0)
+	bounce.light_color = Color("8cb5be")
+	bounce.light_energy = 0.20
+	add_child(bounce)
 
 func _architecture() -> void:
-	var floor_mat := AshGeometry.material(Color("575e57"))
+	var floor_mat := AshSurfaces.material(4, Color("464d47"))
 	AshGeometry.box(self, Vector3(0, -0.2, 0), Vector3(28, 0.4, 30), floor_mat, true)
 	for i in range(-6, 7):
 		AshGeometry.box(self, Vector3(i * 2.0, 0.006, 0), Vector3(0.025, 0.012, 29.8), _iron)
@@ -79,7 +99,8 @@ func _architecture() -> void:
 		AshGeometry.box(self, Vector3(side * 14.0, 2.8, 0), Vector3(0.55, 5.6, 30), _stone, true)
 		for z in [-12.0, -6.0, 0.0, 6.0, 12.0]:
 			AshGeometry.box(self, Vector3(side * 12.3, 3.8, z), Vector3(0.5, 7.6, 0.6), _iron, true)
-			AshGeometry.box(self, Vector3(side * 13.68, 3.7, z), Vector3(0.05, 2.4, 2.9), _glow)
+			var glass := AshGeometry.material(Color("acbbae"), 0.25)
+			AshGeometry.box(_detail, Vector3(side * 13.68, 3.7, z), Vector3(0.05, 2.4, 2.9), glass)
 			for bar in [-0.95, 0.0, 0.95]:
 				AshGeometry.box(self, Vector3(side * 13.59, 3.7, z + bar), Vector3(0.12, 2.5, 0.07), _iron)
 			AshGeometry.box(self, Vector3(side * 13.57, 3.7, z), Vector3(0.13, 0.10, 3.0), _iron)
@@ -99,12 +120,7 @@ func _architecture() -> void:
 	for side in [-1.0, 1.0]:
 		for z in [3.0, 8.5]:
 			var at := Vector3(side * 9.5, 0, z)
-			AshGeometry.box(self, at + Vector3(0, 0.5, 0), Vector3(2.1, 1, 1.4), _iron, true)
-			var spool := AshGeometry.cylinder(self, at + Vector3(0, 1.4, 0), 0.54, 1.7, _wood)
-			spool.rotation.z = PI / 2.0
-			for offset in [-0.86, 0.86]:
-				var wheel := AshGeometry.cylinder(self, at + Vector3(offset, 1.4, 0), 0.68, 0.08, _iron)
-				wheel.rotation.z = PI / 2.0
+			_loom(at)
 	AshGeometry.label(self, Vector3(0, 4.4, -14.6), "НИТЬ ЖИВА, ПОКА ТЫ ИДЁШЬ", Color("d5c8a8"), 48)
 	AshGeometry.label(self, Vector3(-3.8, 2.4, 4.0), "ПРОЛОМИ ПУТЬ\nЛКМ / R", Color("e6d2a3"), 32)
 
@@ -133,6 +149,11 @@ func _lamp(at: Vector3) -> void:
 	light.omni_range = 5.5
 	light.shadow_enabled = false
 	add_child(light)
+	for angle in [0.0, PI / 2.0, PI, PI * 1.5]:
+		var edge := Vector3(cos(angle), 0, sin(angle)) * 0.15
+		AshGeometry.rod(_detail, at + edge, at + edge - Vector3.UP * 0.32, 0.016, _iron)
+	AshGeometry.ring(_detail, at - Vector3.UP * 0.3, 0.16, 0.024, _iron)
+	AshGeometry.rod(_detail, at + Vector3.UP * 0.05, at + Vector3.UP * 0.48, 0.018, _iron)
 
 func _add_grid(id: String, at: Vector3, dimensions: Vector3i, tint: Color, hardness: int, destroyed: Dictionary) -> void:
 	var grid := VoxelStructure.new()
@@ -158,9 +179,13 @@ func _core(at: Vector3, title: String) -> void:
 		var orbit := Node3D.new()
 		root.add_child(orbit)
 		orbit.rotation = Vector3(float(i) * PI / 3.0, float(i) * PI / 4.0, 0)
-		for segment in range(12):
-			var angle := float(segment) * TAU / 12.0
-			AshGeometry.box(orbit, Vector3(cos(angle) * 0.31, sin(angle) * 0.31, 0), Vector3(0.07, 0.07, 0.045), _wood)
+		AshGeometry.ring(orbit, Vector3.ZERO, 0.31, 0.024, _iron)
+	AshGeometry.ring(root, Vector3.ZERO, 0.22, 0.012, _glow).rotation.x = PI / 2.0
+	var core_light := OmniLight3D.new()
+	core_light.light_color = Color("83dfb5")
+	core_light.light_energy = 0.8
+	core_light.omni_range = 2.0
+	root.add_child(core_light)
 	var label := AshGeometry.label(self, at + Vector3(0, 0.75, 0), title, Color("a7f0c9"), 27)
 	root.set_meta("label_node", label)
 	cores.append(root)
@@ -179,8 +204,7 @@ func _thread_node(at: Vector3, title: String) -> void:
 	for offset in [-0.35, 0.35]:
 		AshGeometry.cylinder(root, Vector3(0, offset - 0.34, 0), 0.30, 0.08, _iron)
 	for i in range(5):
-		var ring := AshGeometry.cylinder(root, Vector3(0, -0.55 + float(i) * 0.11, 0), 0.225, 0.025, _glow)
-		ring.rotation.x = PI / 2.0
+		AshGeometry.ring(root, Vector3(0, -0.55 + float(i) * 0.11, 0), 0.225, 0.012, _glow)
 	AshGeometry.sphere(root, Vector3(0, 0.08, 0), 0.11, _glow)
 	var label := AshGeometry.label(self, at + Vector3(0, 0.72, 0), title, Color("a7f0c9"), 24)
 	root.set_meta("label_node", label)
@@ -207,12 +231,101 @@ func _build_sentinel() -> void:
 	AshGeometry.sphere(sentinel, Vector3.ZERO, 0.5, _iron).scale = Vector3(1, 0.65, 1)
 	var red := AshGeometry.material(Color("ff7950"), 1.8)
 	sentinel_eye = AshGeometry.sphere(sentinel, Vector3(0, -0.10, 0.46), 0.15, red)
+	AshGeometry.ring(sentinel, Vector3(0, -0.10, 0.48), 0.19, 0.06, _iron).rotation.x = PI / 2.0
+	for i in range(8):
+		var angle := TAU * float(i) / 8.0
+		var shell := AshGeometry.box(sentinel, Vector3(cos(angle) * 0.4, 0.06, sin(angle) * 0.4), Vector3(0.29, 0.27, 0.18), _iron)
+		shell.rotation.y = -angle
+		AshGeometry.sphere(sentinel, Vector3(cos(angle) * 0.47, 0.17, sin(angle) * 0.47), 0.026, _wood)
+	_rotor = Node3D.new()
+	sentinel.add_child(_rotor)
+	_rotor.position.y = 0.37
+	AshGeometry.ring(_rotor, Vector3.ZERO, 0.6, 0.035, _iron)
+	for angle in [0.0, PI / 2.0, PI, PI * 1.5]:
+		var blade := AshGeometry.box(_rotor, Vector3(cos(angle), 0, sin(angle)) * 0.3, Vector3(0.48, 0.035, 0.11), _wood)
+		blade.rotation.y = -angle
 	for side in [-1.0, 1.0]:
 		for z in [-0.25, 0.25]:
 			var limb := AshGeometry.box(sentinel, Vector3(side * 0.8, -0.15, z), Vector3(1.0, 0.08, 0.09), _wood)
 			limb.rotation.z = side * -0.4
 			AshGeometry.box(sentinel, Vector3(side * 1.23, -0.60, z), Vector3(0.07, 0.62, 0.07), _iron)
+			AshGeometry.sphere(sentinel, Vector3(side * 1.23, -0.29, z), 0.10, _iron)
+			AshGeometry.rod(sentinel, Vector3(side * 1.23, -0.91, z), Vector3(side * 1.12, -1.08, z + 0.1), 0.035, _iron)
+			AshGeometry.cable(sentinel, Vector3(side * 0.36, 0.1, z), Vector3(side * 1.22, -0.3, z), 0.22, _iron, 0.018)
 	sentinel.visible = false
+
+func _loom(at: Vector3) -> void:
+	AshGeometry.box(self, at + Vector3(0, 0.35, 0), Vector3(2.3, 0.7, 1.55), _iron, true)
+	var cloth := AshSurfaces.material(3, Color("72634d"))
+	for side in [-1.0, 1.0]:
+		AshGeometry.box(_detail, at + Vector3(side * 1.0, 1.5, 0.5), Vector3(0.15, 2.8, 0.18), _wood)
+		AshGeometry.box(_detail, at + Vector3(side * 1.0, 0.1, 0), Vector3(0.34, 0.18, 1.8), _iron)
+	AshGeometry.rod(_detail, at + Vector3(-1.1, 2.75, 0.5), at + Vector3(1.1, 2.75, 0.5), 0.10, _wood)
+	AshGeometry.rod(_detail, at + Vector3(-1.12, 1.1, -0.35), at + Vector3(1.12, 1.1, -0.35), 0.30, cloth)
+	for i in range(23):
+		var x := -0.82 + float(i) * 0.075
+		AshGeometry.rod(_detail, at + Vector3(x, 2.6, 0.48), at + Vector3(x, 1.18, -0.42), 0.006, _wood)
+	for side in [-1.0, 1.0]:
+		AshGeometry.ring(_detail, at + Vector3(side * 0.98, 1.1, -0.35), 0.40, 0.075, _iron).rotation.z = PI / 2.0
+	AshGeometry.gear(_detail, at + Vector3(0, 0.67, -0.85), 0.37, _iron)
+	AshGeometry.gear(_detail, at + Vector3(0.63, 0.92, -0.84), 0.23, _wood)
+	AshGeometry.cloth_panel(_detail, at + Vector3(0, 2.68, 0.42), 1.3, 1.13, cloth)
+
+func _decorate() -> void:
+	var cloth := AshSurfaces.material(3, Color("777e69"))
+	var cable_mat := AshGeometry.material(Color("2d3834"))
+	for side in [-1.0, 1.0]:
+		for z in [-12.0, -6.0, 0.0, 6.0, 12.0]:
+			# Stone lintels and iron column plates give the architecture depth.
+			AshGeometry.box(_detail, Vector3(side * 13.57, 2.42, z), Vector3(0.38, 0.15, 3.18), _stone)
+			AshGeometry.box(_detail, Vector3(side * 12.3, 0.15, z), Vector3(0.95, 0.3, 0.95), _iron)
+			for dy in [1.2, 4.0, 5.8]:
+				AshGeometry.box(_detail, Vector3(side * 12.3, dy, z), Vector3(0.58, 0.24, 0.69), _iron)
+				for offset in [-0.19, 0.19]:
+					AshGeometry.sphere(_detail, Vector3(side * 12.3 + offset, dy, z + 0.36), 0.046, _wood)
+			AshGeometry.cable(_detail, Vector3(side * 12.3, 6.2, z), Vector3(0, 6.2, z), 0.75, cable_mat, 0.025)
+		AshGeometry.cloth_panel(_detail, Vector3(side * 6.4, 6.1, 1.6), 1.5, 2.0, cloth)
+		for z in [-11.0, -3.0, 4.0, 11.0]:
+			for i in range(6):
+				var shard := AshGeometry.box(_detail, Vector3(side * (12.7 + float(i % 2) * 0.45), 0.10, z + float(i) * 0.27), Vector3(0.38, 0.17, 0.26), _stone)
+				shard.rotation.y = float(i) * 1.7
+	for z in [-10.0, -2.0, 6.0, 12.0]:
+		AshGeometry.rod(_detail, Vector3(-12.2, 6.4, z), Vector3(0, 7.7, z), 0.12, _iron)
+		AshGeometry.rod(_detail, Vector3(12.2, 6.4, z), Vector3(0, 7.7, z), 0.12, _iron)
+		for x in [-6.0, 0.0, 6.0]:
+			AshGeometry.rod(_detail, Vector3(x, 6.3, z), Vector3(x, 7.7 - absf(x) * 0.105, z), 0.055, _iron)
+	for at in [Vector3(-5.2, 2.75, -5.53), Vector3(10.8, 2.8, -5.53), Vector3(2.8, 2.6, -13.9)]:
+		AshGeometry.gear(_detail, at, 0.55, _iron)
+	_ash = CPUParticles3D.new()
+	_ash.amount = 110
+	_ash.lifetime = 16.0
+	_ash.preprocess = 4.0
+	_ash.position.y = 3.6
+	_ash.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+	_ash.emission_box_extents = Vector3(13, 2.6, 14)
+	_ash.direction = Vector3(0.4, -0.5, 0.2)
+	_ash.gravity = Vector3(0, -0.015, 0)
+	_ash.initial_velocity_min = 0.04
+	_ash.initial_velocity_max = 0.15
+	_ash.scale_amount_min = 0.5
+	_ash.scale_amount_max = 1.2
+	var mote := SphereMesh.new()
+	mote.radius = 0.012
+	mote.height = 0.024
+	mote.radial_segments = 6
+	mote.rings = 3
+	mote.material = AshGeometry.material(Color("b7aa87"), 0.3)
+	_ash.mesh = mote
+	add_child(_ash)
+
+func set_quality(high: bool) -> void:
+	_sun.shadow_enabled = high
+	_ash.emitting = high
+	_ash.visible = high
+
+func animate(_age: float, delta: float) -> void:
+	if is_instance_valid(_rotor) and sentinel.visible:
+		_rotor.rotation.y += delta * 8.0
 
 func snapshot() -> Dictionary:
 	var data: Dictionary = {}

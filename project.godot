@@ -4,7 +4,7 @@ config_version=5
 [application]
 config/name="Пепельные нити"
 config/description="Разрушь преграды. Собери свет. Вернись живым."
-config/version="0.2.0"
+config/version="0.3.0"
 run/main_scene="res://scenes/main.tscn"
 config/features=PackedStringArray("4.4", "GL Compatibility")
 config/icon="res://assets/icon.svg"
@@ -25,8 +25,8 @@ renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
 textures/default_filters/use_nearest_mipmap_filter=false
 environment/defaults/default_clear_color=Color(0.045, 0.055, 0.057, 1)
-anti_aliasing/quality/msaa_3d=0
-lights_and_shadows/directional_shadow/size=1024
+anti_aliasing/quality/msaa_3d=2
+lights_and_shadows/directional_shadow/size=2048
 
 [physics]
 common/physics_ticks_per_second=60
