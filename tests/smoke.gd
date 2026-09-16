@@ -90,7 +90,7 @@ func _run() -> void:
 	paused = false
 	main._stop_audio()
 	# Let the audio mixer release stopped WAV playbacks before destroying nodes.
-	await create_timer(0.2).timeout
+	await create_timer(0.5).timeout
 	main.queue_free()
 	container.queue_free()
 	await process_frame

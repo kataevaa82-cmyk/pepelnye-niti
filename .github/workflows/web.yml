@@ -56,6 +56,23 @@ jobs:
           chmod +x "Godot_v${GODOT_VERSION}-stable_linux.x86_64"
       - name: Import, run engine smoke tests, and export Web
         run: python tools/export_web.py --godot "$GITHUB_WORKSPACE/.tools/Godot_v${GODOT_VERSION}-stable_linux.x86_64"
+      - name: Capture Compatibility graphics
+        shell: bash
+        env:
+          ASH_TESTING: '1'
+          LIBGL_ALWAYS_SOFTWARE: '1'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb libgl1-mesa-dri
+          set -o pipefail
+          xvfb-run -a -s "-screen 0 1280x720x24" ".tools/Godot_v${GODOT_VERSION}-stable_linux.x86_64" --path . --rendering-method gl_compatibility --audio-driver Dummy --resolution 1280x720 --script res://tests/capture.gd 2>&1 | tee render.log
+          if rg 'SCRIPT ERROR:|Parse Error:|^ERROR:' render.log; then exit 1; fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pepelnye-niti-render-review
+          path: build/qa
+          if-no-files-found: error
+          retention-days: 7
       - uses: actions/upload-artifact@v4
         with:
           name: pepelnye-niti-yandex
