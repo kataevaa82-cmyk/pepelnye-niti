@@ -601,10 +601,13 @@ func _show_menu(mode: String) -> void:
 		_menu_button("ЗВУК  " + ("ВЫКЛ" if _muted else "ВКЛ"), _toggle_sound, true, settings)
 		_menu_button("ГРАФИКА  " + ("ВЫСОКАЯ" if _high_quality else "ЭКОНОМНАЯ"), _toggle_quality, true, settings)
 	_menu_text("v0.3  /  Прогресс сохраняется на этом устройстве" + ("\nСохранение недоступно." if _save_problem else ""), 13, Color("84998e"))
-	for child in _menu_content.get_children():
-		if child is Button:
-			child.grab_focus()
-			break
+	var menu_scroll := _menu_content.get_parent() as ScrollContainer
+	menu_scroll.scroll_vertical = 0
+	if mode != "help":
+		for child in _menu_content.get_children():
+			if child is Button:
+				child.grab_focus()
+				break
 
 func _menu_text(value: String, font_size: int, tint: Color = Color("cccabc")) -> Label:
 	var label := _label(_menu_content, value, font_size, tint)

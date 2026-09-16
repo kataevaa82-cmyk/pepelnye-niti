@@ -22,9 +22,9 @@ var _rotor: Node3D
 
 func build(destroyed: Dictionary = {}) -> void:
 	process_mode = Node.PROCESS_MODE_PAUSABLE
-	_wood = AshSurfaces.material(2, Color("9b7d58"))
-	_iron = AshSurfaces.material(1, Color("54615e"))
-	_stone = AshSurfaces.material(0, Color("8b8875"))
+	_wood = AshSurfaces.material(2, Color("634f3a"))
+	_iron = AshSurfaces.material(1, Color("394541"))
+	_stone = AshSurfaces.material(0, Color("5b5d54"))
 	_glow = AshGeometry.material(Color("87d8b6"), 1.3)
 	_detail = Node3D.new()
 	add_child(_detail)
@@ -65,7 +65,7 @@ func _environment() -> void:
 	environment.ambient_light_energy = 0.48
 	environment.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
 	environment.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	environment.tonemap_exposure = 1.15
+	environment.tonemap_exposure = 0.82
 	environment.fog_enabled = true
 	environment.fog_light_color = Color("766b59")
 	environment.fog_density = 0.013
@@ -75,7 +75,7 @@ func _environment() -> void:
 	var sun := DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-53, -30, 0)
 	sun.light_color = Color("ffe1af")
-	sun.light_energy = 1.1
+	sun.light_energy = 0.72
 	sun.shadow_enabled = true
 	sun.directional_shadow_max_distance = 55.0
 	sun.shadow_bias = 0.03
@@ -85,11 +85,11 @@ func _environment() -> void:
 	var bounce := DirectionalLight3D.new()
 	bounce.rotation_degrees = Vector3(-25, 145, 0)
 	bounce.light_color = Color("8cb5be")
-	bounce.light_energy = 0.3
+	bounce.light_energy = 0.20
 	add_child(bounce)
 
 func _architecture() -> void:
-	var floor_mat := AshSurfaces.material(4, Color("777d70"))
+	var floor_mat := AshSurfaces.material(4, Color("464d47"))
 	AshGeometry.box(self, Vector3(0, -0.2, 0), Vector3(28, 0.4, 30), floor_mat, true)
 	for i in range(-6, 7):
 		AshGeometry.box(self, Vector3(i * 2.0, 0.006, 0), Vector3(0.025, 0.012, 29.8), _iron)
@@ -256,7 +256,7 @@ func _build_sentinel() -> void:
 
 func _loom(at: Vector3) -> void:
 	AshGeometry.box(self, at + Vector3(0, 0.35, 0), Vector3(2.3, 0.7, 1.55), _iron, true)
-	var cloth := AshSurfaces.material(3, Color("a39373"))
+	var cloth := AshSurfaces.material(3, Color("72634d"))
 	for side in [-1.0, 1.0]:
 		AshGeometry.box(_detail, at + Vector3(side * 1.0, 1.5, 0.5), Vector3(0.15, 2.8, 0.18), _wood)
 		AshGeometry.box(_detail, at + Vector3(side * 1.0, 0.1, 0), Vector3(0.34, 0.18, 1.8), _iron)

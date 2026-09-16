@@ -17,6 +17,7 @@ var _clock := 0.0
 var _hands: Node3D
 var _hammer: Node3D
 var _coil: Node3D
+const HAND_BASE_Y := -0.055
 
 func _ready() -> void:
 	collision_layer = 2
@@ -79,7 +80,7 @@ func _physics_process(delta: float) -> void:
 		global_position = Vector3(0, 0.2, 10)
 	_swing = maxf(0.0, _swing - delta * 3.4)
 	_hands.rotation.x = -sin(_swing * PI) * 1.05
-	_hands.position.y = sin(_clock * 10.0) * 0.012 * movement.length()
+	_hands.position.y = HAND_BASE_Y + sin(_clock * 10.0) * 0.012 * movement.length()
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("pause_game"):
@@ -143,7 +144,9 @@ func restore_view(yaw: float, pitch: float) -> void:
 func _build_hands() -> void:
 	_hands = Node3D.new()
 	camera.add_child(_hands)
-	var cloth := AshSurfaces.material(3, Color("ad9670"))
+	_hands.scale = Vector3.ONE * 0.88
+	_hands.position = Vector3(0.04, HAND_BASE_Y, 0.02)
+	var cloth := AshSurfaces.material(3, Color("79684f"))
 	var thread := AshGeometry.material(Color("4a4337"))
 	var iron := AshSurfaces.material(1, Color("63716b"))
 	var brass := AshGeometry.material(Color("9d7650"), 0.0, 0.5)

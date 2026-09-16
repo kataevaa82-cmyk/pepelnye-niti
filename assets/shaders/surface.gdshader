@@ -25,7 +25,7 @@ void fragment() {
     float grain = noise21(p * 23.0);
     float broad = noise21(p * 2.7);
     float height = grain * 0.05;
-    vec3 color = tint.rgb * mix(0.64, 1.12, grain * 0.3 + broad * 0.7);
+    vec3 color = tint.rgb * mix(0.72, 1.03, grain * 0.3 + broad * 0.7);
     float rough = 0.88;
     float metal = 0.0;
     if (surface_kind == 0) {
@@ -34,7 +34,7 @@ void fragment() {
         vec2 f = fract(brick);
         vec2 edge = min(f, 1.0 - f);
         float mortar = 1.0 - smoothstep(0.015, 0.055, min(edge.x, edge.y));
-        color *= mix(0.8, 1.16, hash21(floor(brick)));
+        color *= mix(0.82, 1.06, hash21(floor(brick)));
         color = mix(color, tint.rgb * 0.30, mortar);
         height += 0.1 * (1.0 - mortar);
     } else if (surface_kind == 1) {
@@ -46,7 +46,7 @@ void fragment() {
     } else if (surface_kind == 2) {
         float wood = noise21(p * vec2(42.0, 2.0));
         float line = sin(p.x * 88.0 + broad * 9.0) * 0.5 + 0.5;
-        color = tint.rgb * mix(0.46, 1.16, wood * 0.65 + line * 0.35);
+        color = tint.rgb * mix(0.68, 1.04, wood * 0.78 + line * 0.22);
         height = wood * 0.035;
     } else if (surface_kind == 3) {
         float weave = sin(p.x * 150.0) * sin(p.y * 150.0);
